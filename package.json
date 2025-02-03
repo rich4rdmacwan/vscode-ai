@@ -1,6 +1,6 @@
 {
-  "name": "code-ai",
-  "displayName": "code-ai",
+  "name": "vscode-ai",
+  "displayName": "vscode-ai",
   "description": "ai local chatbot",
   "version": "0.0.1",
   "engines": {
@@ -14,7 +14,7 @@
   "contributes": {
     "commands": [
       {
-        "command": "code-ai.start",
+        "command": "vscode-ai.start",
         "title": "Deepseek chat"
       }
     ]
