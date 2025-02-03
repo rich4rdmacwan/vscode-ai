@@ -12,6 +12,15 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "views": {
+			"explorer": [
+				{
+					"type": "webview",
+					"id": "DeepseekChat.deepseekView",
+					"name": "Deepseek Chat"
+				}
+			]
+		},
     "commands": [
       {
         "command": "vscode-ai.start",
