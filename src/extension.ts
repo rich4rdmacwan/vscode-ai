@@ -70,6 +70,7 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'DeepseekChat.deepseekView';
 
 	private _view?: vscode.WebviewView;
+    private cancellationTokenSource?: vscode.CancellationTokenSource; // Store the current token source
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
@@ -80,8 +81,9 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 		_context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
 	) {
+		
 		this._view = webviewView;
-
+		
 		webviewView.webview.options = {
 			// Allow scripts in the webview
 			enableScripts: true,
@@ -97,6 +99,16 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 				if(message.command === 'chat'){
 				const userPrompt = message.text;
 				let responseText = '';
+				// Ensure that a fresh CancellationTokenSource is created for each new chat request
+                if (this.cancellationTokenSource) {
+                    // If a cancellation token exists, cancel it before starting a new chat
+                    this.cancellationTokenSource.cancel();
+                }
+				// Create a new token source for this chat request
+                this.cancellationTokenSource = new vscode.CancellationTokenSource();
+                
+				const token = this.cancellationTokenSource.token;
+
 				try {					
 					const streamResponse = await ollama.chat({
 						model: 'deepseek-r1:14b',
@@ -104,7 +116,13 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 						stream: true
 					});
 					
+					
 					for await (const part of streamResponse){
+						// Check if cancellation is requested
+                        if (token.isCancellationRequested) {
+							// webviewView.webview.postMessage({command: 'chatResponse', text: "cancelling"});
+                            break;  // Exit the loop if cancellation is requested
+                        }
 						responseText += part.message.content;
 						webviewView.webview.postMessage({command: 'chatResponse', text: responseText});
 					}
@@ -112,6 +130,12 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 				} catch(err){
 					webviewView.webview.postMessage({command: 'chatResponse', text: `Error: ${String(err)}`});
 				}
+			}
+			if(message.command === 'cancel'){
+				if (this.cancellationTokenSource) {
+                    this.cancellationTokenSource.cancel();  // Cancel the task
+                    // webviewView.webview.postMessage({ command: 'chatResponse', text: 'Task canceled.' });
+                }
 			}
 		
 		});
@@ -156,7 +180,7 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 		<h3> Deep Vs code extension </h3>
 		<div style="display:block">
 		<textarea id="prompt" rows="3" placeholder="Ask something..."></textarea><br/>
-		<button class="buttonAsk" id="askBtn"><span style="display:none;padding:4px;" id="loadinggif" class="fa fa-circle-o-notch fa-spin"></span>Ask</button>
+		<button class="buttonAsk" id="askBtn"><span style='display:none;padding:4px;' id='loadinggif' class='fa fa-circle-o-notch fa-spin'></span>Ask</button>
 		</div>
 	
 		<div class="response" id="response">
@@ -168,14 +192,21 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 		<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>		
 		<script>			
-
+			const buttonHTML = "<span style='display:none;padding:4px;' id='loadinggif' class='fa fa-circle-o-notch fa-spin'></span>Ask";
 			const vscode = acquireVsCodeApi();
 			document.getElementById('askBtn').addEventListener('click', () => {							
 				const text = document.getElementById('prompt').value;
-				vscode.postMessage({command: 'chat', text});
-				var innerHTML = document.getElementById('askBtn').innerHTML;				
-				document.getElementById('askBtn').innerHTML = innerHTML.replace("Ask", "Thinking...");
-				document.getElementById('loadinggif').style.display = "inline-block";
+				
+				var innerHTML = document.getElementById('askBtn').innerHTML;
+				if(innerHTML.indexOf("Ask")!=-1){
+					document.getElementById('askBtn').innerHTML = innerHTML.replace("Ask", "Thinking...");
+					document.getElementById('loadinggif').style.display = "inline-block";
+					vscode.postMessage({command: 'chat', text});
+				}else{
+					document.getElementById('askBtn').innerHTML = buttonHTML;
+					vscode.postMessage({command: 'cancel'});
+				}
+				
 				});
 			
 			window.addEventListener('message', event => {
@@ -188,7 +219,7 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 					}
 				if (command === 'responseEnd'){
 					var innerHTML = document.getElementById('askBtn').innerHTML;				
-				document.getElementById('askBtn').innerHTML = innerHTML.replace("Replying...", "Ask");
+					document.getElementById('askBtn').innerHTML = innerHTML.replace("Replying...", "Ask");
 					document.querySelector(".buttonAsk").querySelector("#loadinggif").style.display = "none"
 				}
 				
