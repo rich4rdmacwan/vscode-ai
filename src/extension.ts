@@ -99,17 +99,18 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 				let responseText = '';
 				try {					
 					const streamResponse = await ollama.chat({
-						model: 'deepseek-r1:1.5b',
+						model: 'deepseek-r1:14b',
 						messages: [{role: 'user', content: userPrompt}],
 						stream: true
 					});
 					
 					for await (const part of streamResponse){
 						responseText += part.message.content;
-						postMessage({command: 'chatResponse', text: responseText});
+						webviewView.webview.postMessage({command: 'chatResponse', text: responseText});
 					}
+					webviewView.webview.postMessage({command: 'responseEnd', text: ""});
 				} catch(err){
-					postMessage({command: 'chatResponse', text: `Error: ${String(err)}`});
+					webviewView.webview.postMessage({command: 'chatResponse', text: `Error: ${String(err)}`});
 				}
 			}
 		
@@ -153,22 +154,43 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 	</head>
 	<body>
 		<h3> Deep Vs code extension </h3>
+		<div style="display:block">
 		<textarea id="prompt" rows="3" placeholder="Ask something..."></textarea><br/>
-		<button id="askBtn">Ask</button>
-		<md-block id="response"></md-block>
+		<button class="buttonAsk" id="askBtn"><span style="display:none;padding:4px;" id="loadinggif" class="fa fa-circle-o-notch fa-spin"></span>Ask</button>
+		</div>
+	
+		<div class="response" id="response">
+			<!-- Prose content will go here -->
+		</div>
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 		<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>		
-		<script>
+		<script>			
+
 			const vscode = acquireVsCodeApi();
-			document.getElementById('askBtn').addEventListener('click', () => {
+			document.getElementById('askBtn').addEventListener('click', () => {							
 				const text = document.getElementById('prompt').value;
 				vscode.postMessage({command: 'chat', text});
+				var innerHTML = document.getElementById('askBtn').innerHTML;				
+				document.getElementById('askBtn').innerHTML = innerHTML.replace("Ask", "Thinking...");
+				document.getElementById('loadinggif').style.display = "inline-block";
 				});
 			
 			window.addEventListener('message', event => {
 				const {command,  text} = event.data;
 				if (command === 'chatResponse'){
-					document.getElementById('response').innerHTML = marked.parse(text);
+					var innerHTML = document.getElementById('askBtn').innerHTML;				
+					document.getElementById('askBtn').innerHTML = innerHTML.replace("Thinking...", "Replying...");
+					document.getElementById('response').innerHTML = marked.parse(text); 
+					hljs.highlightAll();
 					}
+				if (command === 'responseEnd'){
+					var innerHTML = document.getElementById('askBtn').innerHTML;				
+				document.getElementById('askBtn').innerHTML = innerHTML.replace("Replying...", "Ask");
+					document.querySelector(".buttonAsk").querySelector("#loadinggif").style.display = "none"
+				}
 				
 				});
 		</script>
