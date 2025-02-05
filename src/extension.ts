@@ -1,7 +1,7 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import ollama from 'ollama';
+import ollama, { ListResponse } from 'ollama';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -11,49 +11,6 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "vscode-ai" is now active!');
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	// const disposable = vscode.commands.registerCommand('vscode-ai.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		// vscode.window.showInformationMessage('Hello World from vscode-ai!');
-	// });
-
-	// const disposable = vscode.commands.registerCommand("vscode-ai.start", () => {
-	// 	const panel = vscode.window.createWebviewPanel(
-	// 		'deepchat',
-	// 		'DeepSeek Chat',
-	// 		vscode.ViewColumn.One,
-	// 		{enableScripts: true}
-	// 	);
-	// 	panel.webview.html = getWebViewContent();
-		
-		
-	// 	panel.webview.onDidReceiveMessage(async (message:any) => {
-	// 		if(message.command === 'chat'){
-	// 			const userPrompt = message.text;
-	// 			let responseText = '';
-	// 			try {					
-	// 				const streamResponse = await ollama.chat({
-	// 					model: 'deepseek-r1:1.5b',
-	// 					messages: [{role: 'user', content: userPrompt}],
-	// 					stream: true
-	// 				});
-					
-	// 				for await (const part of streamResponse){
-	// 					responseText += part.message.content;
-	// 					panel.webview.postMessage({command: 'chatResponse', text: responseText});
-	// 				}
-	// 			} catch(err){
-	// 				panel.webview.postMessage({command: 'chatResponse', text: `Error: ${String(err)}`});
-	// 			}
-	// 		}
-	// 	});
-
-	// });
-	
-	// context.subscriptions.push(disposable);
 	const provider = new DeepseekViewProvider(context.extensionUri);
 
 	context.subscriptions.push(
@@ -62,7 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() { }
 
 
 class DeepseekViewProvider implements vscode.WebviewViewProvider {
@@ -70,20 +27,52 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 	public static readonly viewType = 'DeepseekChat.deepseekView';
 
 	private _view?: vscode.WebviewView;
-    private cancellationTokenSource?: vscode.CancellationTokenSource; // Store the current token source
+	private cancellationTokenSource?: vscode.CancellationTokenSource; // Store the current token source
+
+	private _model?:string;
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 	) { }
+
+	async loadModels(webview: vscode.Webview) {
+		// Load existing ollama models
+		try {
+			const value = await ollama.list();
+
+			const rdoBtnStrPrefix = "<label class='modelButton' onclick='selectModel(this)'>" +
+				"<input type='radio' name='modelButton' ";
+			const rdoBtnStrSuffix = "</label>&nbsp;";
+			let rdoBtnsStr = "";
+
+			let i = 0;
+			value.models.forEach(model => {
+				rdoBtnsStr += rdoBtnStrPrefix ;
+				// Select first model as default
+				if(i++ === 0){
+					this._model = model.name;
+					rdoBtnsStr += "checked=checked ";
+				}
+				rdoBtnsStr += ">" + model.name + rdoBtnStrSuffix;
+			});
+			
+
+			webview.postMessage({ command: 'modelsLoaded', text: `${rdoBtnsStr}` });
+			console.log(rdoBtnsStr);
+		}
+		catch (error) {
+			console.error('Promise rejected with error: ' + error);
+		}
+	}
 
 	public resolveWebviewView(
 		webviewView: vscode.WebviewView,
 		_context: vscode.WebviewViewResolveContext,
 		_token: vscode.CancellationToken,
 	) {
-		
+
 		this._view = webviewView;
-		
+
 		webviewView.webview.options = {
 			// Allow scripts in the webview
 			enableScripts: true,
@@ -95,49 +84,60 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
-		webviewView.webview.onDidReceiveMessage(async (message:any) => {
-				if(message.command === 'chat'){
+		this.loadModels(webviewView.webview);
+
+		webviewView.webview.onDidReceiveMessage(async (message: any) => {
+			if (message.command === 'chat') {
 				const userPrompt = message.text;
 				let responseText = '';
 				// Ensure that a fresh CancellationTokenSource is created for each new chat request
-                if (this.cancellationTokenSource) {
-                    // If a cancellation token exists, cancel it before starting a new chat
-                    this.cancellationTokenSource.cancel();
-                }
+				if (this.cancellationTokenSource) {
+					// If a cancellation token exists, cancel it before starting a new chat
+					this.cancellationTokenSource.cancel();
+				}
 				// Create a new token source for this chat request
-                this.cancellationTokenSource = new vscode.CancellationTokenSource();
-                
-				const token = this.cancellationTokenSource.token;
+				this.cancellationTokenSource = new vscode.CancellationTokenSource();
 
-				try {					
+				const token = this.cancellationTokenSource.token;
+				
+				try {
 					const streamResponse = await ollama.chat({
-						model: 'deepseek-r1:14b',
-						messages: [{role: 'user', content: userPrompt}],
+						model: this._model!,
+						messages: [{ role: 'user', content: userPrompt }],
 						stream: true
 					});
-					
-					
-					for await (const part of streamResponse){
+
+
+					for await (const part of streamResponse) {
 						// Check if cancellation is requested
-                        if (token.isCancellationRequested) {
+						if (token.isCancellationRequested) {
 							// webviewView.webview.postMessage({command: 'chatResponse', text: "cancelling"});
-                            break;  // Exit the loop if cancellation is requested
-                        }
+							break;  // Exit the loop if cancellation is requested
+						}
 						responseText += part.message.content;
-						webviewView.webview.postMessage({command: 'chatResponse', text: responseText});
+						webviewView.webview.postMessage({ command: 'chatResponse', text: responseText });
 					}
-					webviewView.webview.postMessage({command: 'responseEnd', text: ""});
-				} catch(err){
-					webviewView.webview.postMessage({command: 'chatResponse', text: `Error: ${String(err)}`});
+					webviewView.webview.postMessage({ command: 'responseEnd', text: "" });
+				} catch (err) {
+					var errstr = String(err);
+					if (errstr.includes("fetch failed")) {
+						errstr += ".<br>Maybe the ollama server is not running? " +
+							"Run<br> ```systemctl start ollama``` <br> or <br>```ollama serve``` <br>in a terminal.";
+					}
+					webviewView.webview.postMessage({ command: 'responseEnd', text: `Error: ${errstr}` });
 				}
 			}
-			if(message.command === 'cancel'){
+			if (message.command === 'cancel') {
 				if (this.cancellationTokenSource) {
-                    this.cancellationTokenSource.cancel();  // Cancel the task
-                    // webviewView.webview.postMessage({ command: 'chatResponse', text: 'Task canceled.' });
-                }
+					this.cancellationTokenSource.cancel();  // Cancel the task
+					// webviewView.webview.postMessage({ command: 'chatResponse', text: 'Task canceled.' });
+				}
 			}
-		
+
+			if (message.command === 'modelSelected') {
+				this._model = message.text;
+			}
+
 		});
 	}
 
@@ -177,7 +177,7 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 		-->
 	</head>
 	<body>
-		<h3> Deep Vs code extension </h3>
+		<div id="modelButtons">abc</div>
 		<div style="display:block">
 		<textarea id="prompt" rows="3" placeholder="Ask something..."></textarea><br/>
 		<button class="buttonAsk" id="askBtn"><span style='display:none;padding:4px;' id='loadinggif' class='fa fa-circle-o-notch fa-spin'></span>Ask</button>
@@ -191,9 +191,15 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
     	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 		<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>		
-		<script>			
+		<script>
 			const buttonHTML = "<span style='display:none;padding:4px;' id='loadinggif' class='fa fa-circle-o-notch fa-spin'></span>Ask";
 			const vscode = acquireVsCodeApi();
+
+			function selectModel(obj) {
+				<!-- document.getElementById('response').innerHTML = obj.innerHTML; -->
+				<!-- vscode.postMessage({command: 'modelSelected', obj.innerHTML}); -->				
+			}
+
 			document.getElementById('askBtn').addEventListener('click', () => {							
 				const text = document.getElementById('prompt').value;
 				
@@ -212,16 +218,26 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 			window.addEventListener('message', event => {
 				const {command,  text} = event.data;
 				if (command === 'chatResponse'){
-					var innerHTML = document.getElementById('askBtn').innerHTML;				
+					var innerHTML = document.getElementById('askBtn').innerHTML;
 					document.getElementById('askBtn').innerHTML = innerHTML.replace("Thinking...", "Replying...");
-					document.getElementById('response').innerHTML = marked.parse(text); 
+					document.querySelector(".buttonAsk").querySelector("#loadinggif").style.display = "none"
+					document.getElementById('response').innerHTML = marked.parse(text);
 					hljs.highlightAll();
 					}
+				
 				if (command === 'responseEnd'){
 					var innerHTML = document.getElementById('askBtn').innerHTML;				
-					document.getElementById('askBtn').innerHTML = innerHTML.replace("Replying...", "Ask");
+					document.getElementById('askBtn').innerHTML = buttonHTML;
 					document.querySelector(".buttonAsk").querySelector("#loadinggif").style.display = "none"
+					if(text !== ''){
+						document.getElementById('response').innerHTML = marked.parse(text);
+					}					
 				}
+
+				if (command === 'modelsLoaded'){
+					document.getElementById('modelButtons').innerHTML = text;
+				}
+
 				
 				});
 		</script>

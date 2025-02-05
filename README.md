@@ -1,35 +1,24 @@
 # vscode-ai README
 
-This is the README for your extension "vscode-ai". After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+A simple extension that creates a chatbot as a Webview view, using an ollama model based chatbot running locally.
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+[ollama](https://ollama.com/download) needs to be installed with at least one [model](https://ollama.com/search) present.
+The better your system configuration, the more powerful the model you can run. 
+Start with lighter models such as [deepseek-r1:1.5b](https://ollama.com/library/deepseek-r1:1.5b) and test heavier models as you go.
+
+
+## Features
+Once a model is installed, you can ask simple questions to it from within vscode. Useful for simple code based questions.
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+This extension contributes a webview view `DeepseekChat.deepseekView`.
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+For now, there is no RAG and internet search. Might add in the future.
 
 ## Release Notes
 
@@ -37,35 +26,4 @@ Users appreciate release notes as you update your extension.
 
 ### 1.0.0
 
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Initial release
