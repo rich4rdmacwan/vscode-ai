@@ -16,17 +16,11 @@
 			"explorer": [
 				{
 					"type": "webview",
-					"id": "DeepseekChat.deepseekView",
-					"name": "Deepseek Chat"
+					"id": "AIChat.aiView",
+					"name": "AI Chat"
 				}
 			]
-		},
-    "commands": [
-      {
-        "command": "vscode-ai.start",
-        "title": "Deepseek chat"
-      }
-    ]
+		}
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

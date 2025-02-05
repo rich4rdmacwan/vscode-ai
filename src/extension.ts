@@ -11,57 +11,78 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "vscode-ai" is now active!');
 
-	const provider = new DeepseekViewProvider(context.extensionUri);
+	const provider = new AIViewProvider(context.extensionUri);
 
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider(DeepseekViewProvider.viewType, provider));
+		vscode.window.registerWebviewViewProvider(AIViewProvider.viewType, provider));
+
 
 }
 
+
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {
+	
+}
 
 
-class DeepseekViewProvider implements vscode.WebviewViewProvider {
+class AIViewProvider implements vscode.WebviewViewProvider {
 
-	public static readonly viewType = 'DeepseekChat.deepseekView';
+	public static readonly viewType = 'AIChat.aiView';
 
 	private _view?: vscode.WebviewView;
 	private cancellationTokenSource?: vscode.CancellationTokenSource; // Store the current token source
 
 	private _model?:string;
+	private _rdoStrStart = "<input type='radio' name='modelButton' id='";
+	private _rdoStrEnd = " />";
 
 	constructor(
 		private readonly _extensionUri: vscode.Uri,
 	) { }
-
+	
+	public showError(error: String, webview: vscode.Webview){
+		if(error.includes("fetch failed")){				
+			var errstr = String(error);
+				if (errstr.includes("fetch failed")) {
+					errstr += ".<br>Maybe the ollama server is not running? " +
+						"Run<br> ```systemctl start ollama``` <br> or <br>```ollama serve``` <br>in a terminal.";
+				}
+				webview.postMessage({ command: 'responseEnd', text: `Error: ${errstr}` });
+		}
+	}
 	async loadModels(webview: vscode.Webview) {
 		// Load existing ollama models
 		try {
 			const value = await ollama.list();
 
-			const rdoBtnStrPrefix = "<label class='modelButton' onclick='selectModel(this)'>" +
-				"<input type='radio' name='modelButton' ";
-			const rdoBtnStrSuffix = "</label>&nbsp;";
+			const rdoLabelStart = "<label onclick='selectModel(this)' for='";
+				
+			const rdoLabelEnd = "</label>";
 			let rdoBtnsStr = "";
 
 			let i = 0;
 			value.models.forEach(model => {
-				rdoBtnsStr += rdoBtnStrPrefix ;
+				// Add radio button html
+				rdoBtnsStr += this._rdoStrStart + model.name + "'" ;
 				// Select first model as default
 				if(i++ === 0){
 					this._model = model.name;
-					rdoBtnsStr += "checked=checked ";
+					rdoBtnsStr += "checked";
 				}
-				rdoBtnsStr += ">" + model.name + rdoBtnStrSuffix;
+				rdoBtnsStr += this._rdoStrEnd;
+				
+				// Add label html
+				rdoBtnsStr += rdoLabelStart + model.name + "'>" + model.name + rdoLabelEnd;
 			});
 			
 
 			webview.postMessage({ command: 'modelsLoaded', text: `${rdoBtnsStr}` });
-			console.log(rdoBtnsStr);
+			
 		}
 		catch (error) {
 			console.error('Promise rejected with error: ' + error);
+			this.showError(String(error), webview);			
 		}
 	}
 
@@ -80,10 +101,10 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 			localResourceRoots: [
 				this._extensionUri
 			]
-		};
+		};		
 
 		webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-
+		
 		this.loadModels(webviewView.webview);
 
 		webviewView.webview.onDidReceiveMessage(async (message: any) => {
@@ -117,14 +138,11 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 						responseText += part.message.content;
 						webviewView.webview.postMessage({ command: 'chatResponse', text: responseText });
 					}
+					
 					webviewView.webview.postMessage({ command: 'responseEnd', text: "" });
+
 				} catch (err) {
-					var errstr = String(err);
-					if (errstr.includes("fetch failed")) {
-						errstr += ".<br>Maybe the ollama server is not running? " +
-							"Run<br> ```systemctl start ollama``` <br> or <br>```ollama serve``` <br>in a terminal.";
-					}
-					webviewView.webview.postMessage({ command: 'responseEnd', text: `Error: ${errstr}` });
+					this.showError(String(err), webviewView.webview);
 				}
 			}
 			if (message.command === 'cancel') {
@@ -135,7 +153,7 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 			}
 
 			if (message.command === 'modelSelected') {
-				this._model = message.text;
+				this._model = message.text;				
 			}
 
 		});
@@ -177,7 +195,8 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 		-->
 	</head>
 	<body>
-		<div id="modelButtons">abc</div>
+		<div class="modelButtons" id="modelButtons">	</div>
+		
 		<div style="display:block">
 		<textarea id="prompt" rows="3" placeholder="Ask something..."></textarea><br/>
 		<button class="buttonAsk" id="askBtn"><span style='display:none;padding:4px;' id='loadinggif' class='fa fa-circle-o-notch fa-spin'></span>Ask</button>
@@ -194,13 +213,20 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 		<script>
 			const buttonHTML = "<span style='display:none;padding:4px;' id='loadinggif' class='fa fa-circle-o-notch fa-spin'></span>Ask";
 			const vscode = acquireVsCodeApi();
+			
+			// Check if we have an old state to restore from
+			const previousState = vscode.getState();
+			let modelButtons = previousState ? previousState.modelButtons : "";
+			document.getElementById('modelButtons').innerHTML = modelButtons;
+			let response = previousState ? previousState.response : "";
+			document.getElementById('response').innerHTML = response;
 
-			function selectModel(obj) {
-				<!-- document.getElementById('response').innerHTML = obj.innerHTML; -->
-				<!-- vscode.postMessage({command: 'modelSelected', obj.innerHTML}); -->				
+			function selectModel(obj) {				
+				vscode.postMessage({command: 'modelSelected', "text": obj.innerHTML});
 			}
 
-			document.getElementById('askBtn').addEventListener('click', () => {							
+			document.getElementById('askBtn').addEventListener('click', () => {
+				
 				const text = document.getElementById('prompt').value;
 				
 				var innerHTML = document.getElementById('askBtn').innerHTML;
@@ -231,13 +257,17 @@ class DeepseekViewProvider implements vscode.WebviewViewProvider {
 					document.querySelector(".buttonAsk").querySelector("#loadinggif").style.display = "none"
 					if(text !== ''){
 						document.getElementById('response').innerHTML = marked.parse(text);
-					}					
+					}
+					<!-- Save state -->
+					modelButtons = document.getElementById('modelButtons').innerHTML
+					vscode.setState({"modelButtons": modelButtons, 
+						"response": document.getElementById('response').innerHTML});
 				}
 
 				if (command === 'modelsLoaded'){
 					document.getElementById('modelButtons').innerHTML = text;
+					vscode.setState({"modelButtons":text, "response":""});
 				}
-
 				
 				});
 		</script>
