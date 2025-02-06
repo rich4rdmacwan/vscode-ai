@@ -2,6 +2,9 @@
   "name": "vscode-ai",
   "displayName": "vscode-ai",
   "description": "ai local chatbot",
+  "icon" : "./media/aichat.png",
+  "repository": {"type":"git", "url":"https://github.com/rich4rdmacwan/vscode-ai.git"},
+  "license":"MIT",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.96.0"
