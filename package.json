@@ -6,7 +6,7 @@
   "repository": {"type":"git", "url":"https://github.com/rich4rdmacwan/vscode-ai.git"},
   "license":"MIT",
   "publisher": "rich4rdmacwan",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "engines": {
     "vscode": "^1.96.0"
   },
